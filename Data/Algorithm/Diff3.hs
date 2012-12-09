@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
 {-| An implementation of a 3-way merge algorithm. -}
 module Data.Algorithm.Diff3 (Hunk(..), diff3) where
 
@@ -44,19 +43,20 @@ toHunk a  b
 isA :: (DI, t) -> Bool
 isA (F,_) = False
 isA (_,_) = True
-
+{-# INLINE isA #-}
 
 --------------------------------------------------------------------------------
 isO :: (DI, t) -> Bool
 isO (S,_) = False
 isO (_,_) = True
+{-# INLINE isO #-}
 
 
 --------------------------------------------------------------------------------
 isB :: (DI, t) -> Bool
 isB (B,_) = True
 isB (_,_) = False
-
+{-# INLINE isB #-}
 
 --------------------------------------------------------------------------------
 shortestMatch :: [(DI,a)] -> [(DI,a)] -> ([Hunk a], [(DI, a)], [(DI, a)])
