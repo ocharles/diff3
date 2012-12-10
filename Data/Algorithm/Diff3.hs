@@ -1,5 +1,5 @@
 {-| An implementation of a 3-way merge algorithm. -}
-module Data.Algorithm.Diff3 (Hunk(..), diff3) where
+module Data.Algorithm.Diff3 (Hunk(..), diff3, merge) where
 
 import Data.Algorithm.Diff
 import Data.Monoid (Monoid, mempty, mappend)
@@ -14,15 +14,27 @@ data Hunk a = ChangedInA [a] | ChangedInB [a] | Both [a] | Conflict [a] [a] [a]
 
 --------------------------------------------------------------------------------
 -- | Perform a 3-way diff against 2 documents and the original document.
-diff3 :: (Eq a) => [a] -> [a] -> [a] -> [Hunk a]
+diff3 :: Eq a => [a] -> [a] -> [a] -> [Hunk a]
 diff3 a o b = step (getDiff o a) (getDiff o b)
   where
-    step :: [(DI, a)] -> [(DI, a)] -> [Hunk a]
     step [] [] = []
+    step [] ob = toHunk [] ob
+    step oa [] = toHunk oa []
     step oa ob =
       let (conflictHunk, ra, rb) = shortestConflict oa ob
           (matchHunk, ra', rb')  = shortestMatch ra rb
       in conflictHunk ++ matchHunk ++ step ra' rb'
+
+
+--------------------------------------------------------------------------------
+merge :: [Hunk a] -> Either [Hunk a] [a]
+merge hunks = maybe (Left hunks) Right $ go hunks
+  where
+    go [] = Just []
+    go ((Conflict _ _ _):_) = Nothing
+    go ((ChangedInA as):t) = fmap (as ++) $ go t
+    go ((ChangedInB bs):t) = fmap (bs ++) $ go t
+    go ((Both xs):t) = fmap (xs ++) $ go t
 
 
 --------------------------------------------------------------------------------
@@ -72,6 +84,8 @@ shortestConflict l r =
     let (hunk, rA, rB) = go l r
     in (uncurry toHunk hunk, rA, rB)
   where
+    go [] b = (([], b), [], [])
+    go a [] = ((a, []), [], [])
     go a b =
       let (as, ta) = break isBoth a
           (bs, tb) = break isBoth b
