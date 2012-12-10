@@ -20,5 +20,17 @@ source-repository head
 library
   exposed-modules:     Data.Algorithm.Diff3
   build-depends:       base ==4.6.*, Diff ==0.1.*
+  hs-source-dirs: src
   ghc-options: -Wall -fwarn-tabs -funbox-strict-fields -O2
                -fno-warn-orphans -fno-warn-unused-do-bind
+
+
+test-suite properties
+  type: exitcode-stdio-1.0
+  main-is: test/properties.hs
+  build-depends:
+    base,
+    diff3,
+    QuickCheck,
+    test-framework,
+    test-framework-quickcheck2
