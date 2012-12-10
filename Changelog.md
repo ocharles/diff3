@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2
+## 0.1.2
 
 - Fixed some cases where input would cause `diff3` to never terminate.
 - Corrected the implementation of `diff3` to handle trailing conflicts
