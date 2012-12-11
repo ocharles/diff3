@@ -7,13 +7,23 @@ import Data.Monoid (Monoid, mempty, mappend)
 --------------------------------------------------------------------------------
 -- | A hunk is a collection of changes that occur in a document. A hunk can be
 -- some changes only in A, only in B, in both A & B (equally), or conflicting
--- between A, B and the original document.
-data Hunk a = ChangedInA [a] | ChangedInB [a] | Both [a] | Conflict [a] [a] [a]
+-- between A, B and the original document.  All hunks take 3 constructors, which
+-- are, in order - the elements in the left document, the original document, and
+-- the right document. This order matches the order of parameters to 'diff3'.
+data Hunk a = LeftChange [a] [a] [a]
+            | RightChange [a] [a] [a]
+            | Unchanged [a] [a] [a]
+            | Conflict [a] [a] [a]
   deriving (Eq, Show)
 
 
 --------------------------------------------------------------------------------
--- | Perform a 3-way diff against 2 documents and the original document.
+-- | Perform a 3-way diff against 2 documents and the original document. This
+-- returns a list of triples, where each triple contains all parts of the
+-- original document that either agree on 2 or 3 sides, or conflict. This can be
+-- considered a \'low level\' interface to the 3-way diff algorithm - you may be
+-- more interested in 'merge' and 'toHunks', which provide a higher level
+-- interface.
 diff3 :: Eq a => [a] -> [a] -> [a] -> [Hunk a]
 diff3 a o b = step (getDiff o a) (getDiff o b)
   where
@@ -32,54 +42,51 @@ merge hunks = maybe (Left hunks) Right $ go hunks
   where
     go [] = Just []
     go ((Conflict _ _ _):_) = Nothing
-    go ((ChangedInA as):t) = fmap (as ++) $ go t
-    go ((ChangedInB bs):t) = fmap (bs ++) $ go t
-    go ((Both xs):t) = fmap (xs ++) $ go t
+    go ((LeftChange l _ _):t) = fmap (l ++) $ go t
+    go ((RightChange _ _ r):t) = fmap (r ++) $ go t
+    go ((Unchanged _ o _):t) = fmap (o ++) $ go t
 
 
 --------------------------------------------------------------------------------
-toHunk :: [(DI, a)] -> [(DI, a)] -> [Hunk a]
+toHunk :: [Diff a] -> [Diff a] -> [Hunk a]
 toHunk [] [] = mempty
-toHunk a  [] = return $ ChangedInA $ map snd a
-toHunk [] b  = return $ ChangedInB $ map snd b
+toHunk a  [] = toHunk' LeftChange a []
+toHunk [] b  = toHunk' RightChange [] b
 toHunk a  b
-  | all isB a && all isB b = return $ Both $ map snd $ filter isA a
-  | all isB a = return $ ChangedInB $ map snd $ filter isA b
-  | all isB b = return $ ChangedInA $ map snd $ filter isA a
-  | otherwise = return $ Conflict (map snd $ filter isA a)
-                                  (map snd $ filter isO a)
-                                  (map snd $ filter isA b)
+  | all isB a && all isB b = toHunk' Unchanged a b
+  | all isB a = toHunk' RightChange a b
+  | all isB b = toHunk' LeftChange a b
+  | otherwise = toHunk' Conflict a b
 
+toHunk' :: ([a] -> [a] -> [a] -> Hunk a) -> [Diff a] -> [Diff a] -> [Hunk a]
+toHunk' c a b = return $ c (takeSecond a) (takeBoth a) (takeSecond b)
 
---------------------------------------------------------------------------------
-isA :: (DI, t) -> Bool
-isA (F,_) = False
-isA (_,_) = True
-{-# INLINE isA #-}
+takeSecond :: [Diff a] -> [a]
+takeSecond []            = []
+takeSecond (Second x:xs) = x:takeSecond xs
+takeSecond (Both x _:xs) = x:takeSecond xs
+takeSecond (_:xs)        = takeSecond xs
 
---------------------------------------------------------------------------------
-isO :: (DI, t) -> Bool
-isO (S,_) = False
-isO (_,_) = True
-{-# INLINE isO #-}
+takeBoth :: [Diff a] -> [a]
+takeBoth []            = []
+takeBoth (Both x _:xs) = x:takeBoth xs
+takeBoth (_:xs)        = takeBoth xs
 
-
---------------------------------------------------------------------------------
-isB :: (DI, t) -> Bool
-isB (B,_) = True
-isB (_,_) = False
+isB :: Diff a -> Bool
+isB (Both _ _) = True
+isB _ = False
 {-# INLINE isB #-}
 
 --------------------------------------------------------------------------------
-shortestMatch :: [(DI,a)] -> [(DI,a)] -> ([Hunk a], [(DI, a)], [(DI, a)])
+shortestMatch :: [Diff a] -> [Diff a] -> ([Hunk a], [Diff a], [Diff a])
 shortestMatch oa ob = go oa ob [] []
   where
-    go (x@(B,_):xs) (y@(B,_):ys) accX accY = go xs ys (accX ++ [x]) (accY ++ [y])
+    go (x@(Both _ _):xs) (y@(Both _ _):ys) accX accY = go xs ys (accX ++ [x]) (accY ++ [y])
     go xs ys accX accY = (toHunk accX accY, xs, ys)
 
 
 --------------------------------------------------------------------------------
-shortestConflict :: [(DI,a)] -> [(DI,a)] -> ([Hunk a], [(DI, a)], [(DI, a)])
+shortestConflict :: [Diff a] -> [Diff a] -> ([Hunk a], [Diff a], [Diff a])
 shortestConflict l r =
     let (hunk, rA, rB) = go l r
     in (uncurry toHunk hunk, rA, rB)
@@ -97,19 +104,19 @@ shortestConflict l r =
          then ((as, bs), ta, tb)
          else ((as ++ as', bs ++ bs'), [], []) <> go ta' tb'
 
-    isBoth (B,_) = True
-    isBoth (_,_) = False
+    isBoth (Both _ _) = True
+    isBoth _ = False
 
-    motion (S,_) = 0
+    motion (Second _) = 0
     motion _ = 1
 
 
 --------------------------------------------------------------------------------
-incurMotion :: Int -> [(DI, t)] -> ([(DI,t)], [(DI,t)])
+incurMotion :: Int -> [Diff a] -> ([Diff a], [Diff a])
 incurMotion _ [] = ([], [])
 incurMotion 0 as  = ([], as)
-incurMotion n (a@(B,_):as) = ([a], []) <> incurMotion (pred n) as
-incurMotion n (a@(S,_):as) = ([a], []) <> incurMotion (pred n) as
+incurMotion n (a@(Both _ _):as) = ([a], []) <> incurMotion (pred n) as
+incurMotion n (a@(Second _):as) = ([a], []) <> incurMotion (pred n) as
 incurMotion n (a:as) = ([a], []) <> incurMotion n as
 
 
