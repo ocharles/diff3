@@ -23,7 +23,7 @@ identityMerge as = merge (diff3 as as as) == Right as
 
 main :: IO ()
 main =
-  let testOpts = mempty { topt_maximum_generated_tests = Just 5000 }
+  let testOpts = mempty { topt_maximum_generated_tests = Just 1000 }
       runner = mempty { ropt_test_options = Just testOpts }
   in defaultMainWithOpts
        [ testProperty "Can make changes in left document" leftChanges
