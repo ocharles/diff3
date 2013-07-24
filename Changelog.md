@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Now uses Diff 0.2 or higher
+
+-----
+
 ## 0.1.2
 
 - Fixed some cases where input would cause `diff3` to never terminate.
