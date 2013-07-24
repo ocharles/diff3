@@ -1,5 +1,5 @@
 name:                diff3
-version:             0.2.0.2
+version:             0.2.0.3
 synopsis:            Perform a 3-way difference of documents
 homepage:            http://github.com/ocharles/diff3.git
 license:             BSD3

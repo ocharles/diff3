@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0.3
+
+- Work around a bug with test-framework
+
+-----
+
 ## 0.2.0
 
 - Now uses Diff 0.2 or higher
