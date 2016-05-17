@@ -118,7 +118,7 @@ incurMotion :: Int -> [Diff a] -> ([Diff a], [Diff a])
 incurMotion _ [] = ([], [])
 incurMotion 0 as  = ([], as)
 incurMotion n (a@(Both _ _):as) = ([a], []) <> incurMotion (pred n) as
-incurMotion n (a@(Second _):as) = ([a], []) <> incurMotion (pred n) as
+incurMotion n (a@(First _):as) = ([a], []) <> incurMotion (pred n) as
 incurMotion n (a:as) = ([a], []) <> incurMotion n as
 
 
