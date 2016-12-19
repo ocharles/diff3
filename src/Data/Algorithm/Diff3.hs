@@ -100,8 +100,8 @@ shortestConflict l r =
           (bs, tb) = break isBoth b
           am = sum $ map motion as
           bm = sum $ map motion bs
-          (as', ta') = incurMotion bm ta
-          (bs', tb') = incurMotion am tb
+          (as', ta') = if bm > am then incurMotion (bm-am) ta else ([], ta)
+          (bs', tb') = if am > bm then incurMotion (am-bm) tb else ([], tb)
       in if am == bm
          then ((as, bs), ta, tb)
          else ((as ++ as', bs ++ bs'), [], []) <> go ta' tb'
