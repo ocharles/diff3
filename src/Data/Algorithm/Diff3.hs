@@ -1,5 +1,5 @@
 {-| An implementation of a 3-way merge algorithm. -}
-module Data.Algorithm.Diff3 (Hunk(..), diff3, merge) where
+module Data.Algorithm.Diff3 (Hunk(..), diff3, combine, merge) where
 
 import Data.Algorithm.Diff
 import Data.Monoid (Monoid, mempty, mappend)
@@ -29,15 +29,27 @@ instance Functor Hunk where
 -- a \'low level\' interface to the 3-way diff algorithm - you may be more
 -- interested in 'merge'.
 diff3 :: Eq a => [a] -> [a] -> [a] -> [Hunk a]
-diff3 a o b = step (getDiff o a) (getDiff o b)
+diff3 a o b = combine (getDiff o a) (getDiff o b)
+
+--------------------------------------------------------------------------------
+-- | Combine two list of 'Diff's representing two diverging changes from
+-- the __same__ original document into a list of 'Hunk's representing
+-- a three-way merge.
+--
+-- Behavior is undefined if the two inputs do not come from diffs from the
+-- same original document.
+--
+-- @
+-- 'diff3' a o b = 'combine' ('getDiff' o a) ('getDiff' o b)
+-- @
+combine :: [Diff a] -> [Diff a] -> [Hunk a]
+combine [] [] = []
+combine [] ob = toHunk [] ob
+combine oa [] = toHunk oa []
+combine oa ob = conflictHunk ++ matchHunk ++ combine ra' rb'
   where
-    step [] [] = []
-    step [] ob = toHunk [] ob
-    step oa [] = toHunk oa []
-    step oa ob =
-      let (conflictHunk, ra, rb) = shortestConflict oa ob
-          (matchHunk, ra', rb')  = shortestMatch ra rb
-      in conflictHunk ++ matchHunk ++ step ra' rb'
+    (conflictHunk, ra, rb) = shortestConflict oa ob
+    (matchHunk, ra', rb')  = shortestMatch ra rb
 
 
 --------------------------------------------------------------------------------
