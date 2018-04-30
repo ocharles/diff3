@@ -1,6 +1,7 @@
 {-| An implementation of a 3-way merge algorithm. -}
 module Data.Algorithm.Diff3 (Hunk(..), diff3, merge) where
 
+import Prelude hiding ((<>))
 import Data.Algorithm.Diff
 import Data.Monoid (Monoid, mempty, mappend)
 
