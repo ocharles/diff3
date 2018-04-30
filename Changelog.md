@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Build with GHC 8.4
+
+---
+
 ## 0.3
 
 0.3 includes two semantic changes from @sth:
