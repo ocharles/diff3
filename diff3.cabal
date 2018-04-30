@@ -11,7 +11,6 @@ build-type:          Simple
 cabal-version:       >=1.8
 bug-reports: http://github.com/ocharles/diff3/issues
 copyright: Copyright (C) 2012 Oliver Charles
-synopsis:            Perform a 3-way difference of documents
 
 source-repository head
   type: git
