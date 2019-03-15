@@ -11,6 +11,7 @@ module Data.Algorithm.Diff3 (
 
 import Data.Algorithm.Diff
 import Data.Monoid (Monoid, mempty, mappend)
+import Prelude hiding ((<>))
 
 --------------------------------------------------------------------------------
 -- | A hunk is a collection of changes that occur in a document. A hunk can be
