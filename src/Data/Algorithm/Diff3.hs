@@ -1,9 +1,18 @@
 {-| An implementation of a 3-way merge algorithm. -}
-module Data.Algorithm.Diff3 (Hunk(..), diff3, merge) where
+module Data.Algorithm.Diff3 (
+    Hunk(..)
+  , diff3
+  , merge
+  -- * Non-structural equality
+  , diff3By
+  , mergeLeft
+  , mergeRight
+  ) where
 
 import Prelude hiding ((<>))
 import Data.Algorithm.Diff
 import Data.Monoid (Monoid, mempty, mappend)
+import Prelude hiding ((<>))
 
 --------------------------------------------------------------------------------
 -- | A hunk is a collection of changes that occur in a document. A hunk can be
@@ -11,16 +20,20 @@ import Data.Monoid (Monoid, mempty, mappend)
 -- between A, B and the original document.  All hunks take 3 constructors, which
 -- are, in order - the elements in the left document, the original document, and
 -- the right document. This order matches the order of parameters to 'diff3'.
+--
+-- For 'Unchanged', contains the value from both A, the original, and B, in
+-- case you are using a form of equality that doesn't check all data (see
+-- 'Diff').
 data Hunk a = LeftChange [a]
             | RightChange [a]
-            | Unchanged [a]
+            | Unchanged [(a,a,a)]
             | Conflict [a] [a] [a]
   deriving (Eq, Show)
 
 instance Functor Hunk where
   fmap f (LeftChange ls) = LeftChange (map f ls)
   fmap f (RightChange rs) = RightChange (map f rs)
-  fmap f (Unchanged os) = Unchanged (map f os)
+  fmap f (Unchanged os) = Unchanged (map (\(a,o,b) -> (f a, f o, f b)) os)
   fmap f (Conflict ls os rs) = Conflict (map f ls) (map f os) (map f rs)
 
 --------------------------------------------------------------------------------
@@ -30,7 +43,13 @@ instance Functor Hunk where
 -- a \'low level\' interface to the 3-way diff algorithm - you may be more
 -- interested in 'merge'.
 diff3 :: Eq a => [a] -> [a] -> [a] -> [Hunk a]
-diff3 a o b = step (getDiff o a) (getDiff o b)
+diff3 = diff3By (==)
+
+--------------------------------------------------------------------------------
+-- | A form of 'diff3' with no 'Eq' constraint.  Instead, an equality
+-- predicate is taken as the first argument.
+diff3By :: (a -> a -> Bool) -> [a] -> [a] -> [a] -> [Hunk a]
+diff3By f a o b = step (getDiffBy f o a) (getDiffBy f o b)
   where
     step [] [] = []
     step [] ob = toHunk [] ob
@@ -42,14 +61,42 @@ diff3 a o b = step (getDiff o a) (getDiff o b)
 
 
 --------------------------------------------------------------------------------
+-- | Merge a list of 'Hunk's with no conflicts.  If any conflicts are found
+-- (and unresolved), 'Left' is returned with the original list.
+--
+-- If there is a substring of identical elements in all three input lists,
+-- prefers the "original" elements.  This only matters in the case where
+-- equality is non-structural.  See 'mergeLeft' and 'mergeRight' for other
+-- options.
 merge :: [Hunk a] -> Either [Hunk a] [a]
-merge hunks = maybe (Left hunks) Right $ go hunks
+merge = mergeOn Nothing
+
+--------------------------------------------------------------------------------
+-- | Version of 'merge' where, if there is a substring of identical
+-- elements in the original three lists, prefers the left side option.
+-- Only differs from 'merge' in the case where equality is non-structural.
+mergeLeft :: [Hunk a] -> Either [Hunk a] [a]
+mergeLeft = mergeOn (Just False)
+
+--------------------------------------------------------------------------------
+-- | Version of 'merge' where, if there is a substring of identical
+-- elements in the original three lists, prefers the left side option.
+-- Only differs from 'merge' in the case where equality is non-structural.
+mergeRight :: [Hunk a] -> Either [Hunk a] [a]
+mergeRight = mergeOn (Just True)
+
+mergeOn :: Maybe Bool -> [Hunk a] -> Either [Hunk a] [a]
+mergeOn p hunks = maybe (Left hunks) Right $ go hunks
   where
     go [] = Just []
     go ((Conflict _ _ _):_) = Nothing
     go ((LeftChange l):t) = fmap (l ++) $ go t
     go ((RightChange r):t) = fmap (r ++) $ go t
-    go ((Unchanged o):t) = fmap (o ++) $ go t
+    go ((Unchanged o):t) = fmap (map f o ++) $ go t
+    f (a,o,b) = case p of
+                  Just False -> a
+                  Nothing    -> o
+                  Just True  -> b
 
 
 --------------------------------------------------------------------------------
@@ -57,11 +104,13 @@ toHunk :: [Diff a] -> [Diff a] -> [Hunk a]
 toHunk [] [] = mempty
 toHunk a  [] = [LeftChange $ takeSecond a]
 toHunk [] b  = [RightChange $ takeSecond b]
-toHunk a  b
-  | all isB a && all isB b = [Unchanged $ takeFirst a]
-  | all isB a = [RightChange $ takeSecond b]
-  | all isB b = [LeftChange $ takeSecond a]
-  | otherwise = [Conflict (takeSecond a) (takeFirst a) (takeSecond b)]
+toHunk a  b  = case (traverse getBoth a, traverse getBoth b) of
+    (Just a', Just b') -> [Unchanged (zipWith comb a' b')]
+    (Just _ , Nothing) -> [RightChange $ takeSecond b]
+    (Nothing, Just _ ) -> [LeftChange  $ takeSecond a]
+    (Nothing, Nothing) -> [Conflict (takeSecond a) (takeFirst a) (takeSecond b)]
+  where
+    comb (ox, x) (_, y) = (x, ox, y)
 
 takeSecond :: [Diff a] -> [a]
 takeSecond []            = []
@@ -75,10 +124,15 @@ takeFirst (First x :xs) = x:takeFirst xs
 takeFirst (Both x _:xs) = x:takeFirst xs
 takeFirst (_:xs)        = takeFirst xs
 
-isB :: Diff a -> Bool
-isB (Both _ _) = True
-isB _ = False
-{-# INLINE isB #-}
+getBoth :: Diff a -> Maybe (a, a)
+getBoth (Both o x) = Just (o, x)
+getBoth _          = Nothing
+{-# INLINE getBoth #-}
+
+-- isB :: Diff a -> Bool
+-- isB (Both _ _) = True
+-- isB _ = False
+-- {-# INLINE isB #-}
 
 --------------------------------------------------------------------------------
 shortestMatch :: [Diff a] -> [Diff a] -> ([Hunk a], [Diff a], [Diff a])
